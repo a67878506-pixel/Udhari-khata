@@ -1,0 +1,6 @@
+{
+  "name": "Udhaar Khata",
+  "description": "Real Firebase-backed digital Udhaar Khata and Hisaab-Kitab app for tracking Khatas, Lena-Dena, transactions, and partner sharing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

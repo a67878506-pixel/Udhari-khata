@@ -1,0 +1,235 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.]+$');
+    }
+
+    function isKhataMember(khataId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/khatas/$(khataId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/khatas/$(khataId)).data.memberUids;
+    }
+
+    // Validation Functions
+    function isValidUser(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 200 &&
+             data.userId is string && data.userId.size() >= 3 && data.userId.size() <= 30 &&
+             data.normalizedUserId is string && data.normalizedUserId.size() >= 3 && data.normalizedUserId.size() <= 30 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUserIdReservation(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.userId is string && data.userId.size() >= 3 && data.userId.size() <= 30 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidKhata(data) {
+      return data.khataId is string && data.khataId.size() > 0 && data.khataId.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.ownerUid is string && data.ownerUid.size() > 0 &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 50 &&
+             data.totalLena is int && data.totalDena is int && data.netBalance is int && data.peopleCount is int &&
+             data.archived is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPerson(data) {
+      return data.personId is string && data.personId.size() > 0 && data.personId.size() <= 128 &&
+             data.khataId is string && data.khataId.size() > 0 && data.khataId.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (!('phone' in data) || data.phone == null || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500)) &&
+             data.totalLena is int && data.totalDena is int && data.netBalance is int &&
+             data.archived is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTransaction(data) {
+      return data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() <= 128 &&
+             data.khataId is string && data.khataId.size() > 0 && data.khataId.size() <= 128 &&
+             data.personId is string && data.personId.size() > 0 && data.personId.size() <= 128 &&
+             data.amount is int && data.amount > 0 &&
+             (data.type == 'LENA' || data.type == 'DENA') &&
+             (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500)) &&
+             data.createdBy is string && data.createdByName is string && data.createdByName.size() <= 100 &&
+             (!('updatedBy' in data) || data.updatedBy == null || data.updatedBy is string) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is timestamp) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAuditLog(data) {
+      return data.logId is string && data.logId.size() > 0 && data.logId.size() <= 128 &&
+             data.khataId is string && data.khataId.size() > 0 && data.khataId.size() <= 128 &&
+             (!('personId' in data) || data.personId == null || (data.personId is string && data.personId.size() <= 128)) &&
+             (!('transactionId' in data) || data.transactionId == null || (data.transactionId is string && data.transactionId.size() <= 128)) &&
+             data.actorUid is string && data.actorUid == request.auth.uid &&
+             data.actorName is string && data.actorName.size() <= 100 &&
+             data.action is string && data.action.size() <= 50 &&
+             (!('amount' in data) || data.amount == null || data.amount is int) &&
+             data.description is string && data.description.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidPartnerRequest(data) {
+      return data.requestId is string && data.requestId.size() > 0 && data.requestId.size() <= 128 &&
+             data.khataId is string && data.khataId.size() > 0 && data.khataId.size() <= 128 &&
+             data.khataName is string && data.khataName.size() > 0 && data.khataName.size() <= 100 &&
+             data.senderUid is string && data.senderUserId is string && data.senderName is string &&
+             data.receiverUid is string && data.receiverUserId is string &&
+             (data.status == 'pending' || data.status == 'accepted' || data.status == 'rejected' || data.status == 'cancelled') &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(userId) &&
+                       isValidUser(incoming());
+      allow update: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().uid == existing().uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUser(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'userId', 'normalizedUserId', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // 2. UserIds Reservation Registry
+    match /userIds/{normalizedUserId} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn() &&
+                       isValidId(normalizedUserId) &&
+                       incoming().uid == request.auth.uid &&
+                       isValidUserIdReservation(incoming());
+      allow update, delete: if false;
+    }
+
+    // 3. Khatas Collection
+    match /khatas/{khataId} {
+      allow get: if isSignedIn() &&
+                    isValidId(khataId) &&
+                    (resource.data.ownerUid == request.auth.uid || request.auth.uid in resource.data.memberUids);
+      allow list: if isSignedIn() &&
+                    request.auth.uid in resource.data.memberUids;
+      allow create: if isSignedIn() &&
+                       isValidId(khataId) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       request.auth.uid in incoming().memberUids &&
+                       isValidKhata(incoming());
+      allow update: if isSignedIn() &&
+                       isValidId(khataId) &&
+                       (resource.data.ownerUid == request.auth.uid || request.auth.uid in resource.data.memberUids) &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidKhata(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'memberUids', 'totalLena', 'totalDena', 'netBalance', 'peopleCount', 'archived', 'updatedAt']);
+      allow delete: if isSignedIn() &&
+                       isValidId(khataId) &&
+                       resource.data.ownerUid == request.auth.uid;
+
+      // 4. People Subcollection
+      match /people/{personId} {
+        allow get, list: if isKhataMember(khataId);
+        allow create: if isKhataMember(khataId) &&
+                         isValidId(personId) &&
+                         incoming().khataId == khataId &&
+                         isValidPerson(incoming());
+        allow update: if isKhataMember(khataId) &&
+                         isValidId(personId) &&
+                         incoming().khataId == existing().khataId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidPerson(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'note', 'totalLena', 'totalDena', 'netBalance', 'archived', 'updatedAt']);
+        allow delete: if isKhataMember(khataId);
+      }
+
+      // 5. Transactions Subcollection
+      match /transactions/{transactionId} {
+        allow get, list: if isKhataMember(khataId);
+        allow create: if isKhataMember(khataId) &&
+                         isValidId(transactionId) &&
+                         incoming().khataId == khataId &&
+                         incoming().createdBy == request.auth.uid &&
+                         isValidTransaction(incoming());
+        allow update: if isKhataMember(khataId) &&
+                         isValidId(transactionId) &&
+                         incoming().khataId == existing().khataId &&
+                         incoming().personId == existing().personId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().createdBy == existing().createdBy &&
+                         isValidTransaction(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'type', 'note', 'updatedBy', 'updatedAt', 'deletedAt']);
+        allow delete: if isKhataMember(khataId);
+      }
+
+      // 6. Audit Logs Subcollection (Append-only)
+      match /auditLogs/{logId} {
+        allow get, list: if isKhataMember(khataId);
+        allow create: if isKhataMember(khataId) &&
+                         isValidId(logId) &&
+                         incoming().khataId == khataId &&
+                         incoming().actorUid == request.auth.uid &&
+                         isValidAuditLog(incoming());
+        allow update, delete: if false;
+      }
+    }
+
+    // 7. Partner Requests Collection
+    match /partnerRequests/{requestId} {
+      allow get: if isSignedIn() &&
+                    isValidId(requestId) &&
+                    (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow list: if isSignedIn() &&
+                    (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       incoming().senderUid == request.auth.uid &&
+                       isValidPartnerRequest(incoming());
+      allow update: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid) &&
+                       incoming().senderUid == existing().senderUid &&
+                       incoming().receiverUid == existing().receiverUid &&
+                       incoming().khataId == existing().khataId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidPartnerRequest(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       resource.data.senderUid == request.auth.uid;
+    }
+  }
+}

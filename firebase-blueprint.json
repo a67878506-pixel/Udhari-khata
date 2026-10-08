@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with display name and public unique user handle",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "userId": { "type": "string", "description": "User chosen unique handle" },
+        "normalizedUserId": { "type": "string", "description": "Lowercase normalized unique handle" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp via serverTimestamp" }
+      },
+      "required": ["uid", "name", "email", "userId", "normalizedUserId", "createdAt", "updatedAt"]
+    },
+    "UserIdReservation": {
+      "title": "UserIdReservation",
+      "description": "Uniqueness reservation registry document for a normalized user handle",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID of the owner" },
+        "userId": { "type": "string", "description": "Original user handle casing" },
+        "name": { "type": "string", "description": "Owner display name for partner lookups" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Reservation timestamp via serverTimestamp" }
+      },
+      "required": ["uid", "userId", "name", "createdAt"]
+    },
+    "Khata": {
+      "title": "Khata",
+      "description": "An account or ledger of hisaab-kitab",
+      "type": "object",
+      "properties": {
+        "khataId": { "type": "string", "description": "Unique Khata document ID" },
+        "name": { "type": "string", "description": "User chosen Khata title" },
+        "ownerUid": { "type": "string", "description": "Creator user UID" },
+        "memberUids": { "type": "array", "description": "List of user UIDs authorized to view and edit this Khata" },
+        "totalLena": { "type": "integer", "description": "Sum of active Lena in rupees or paise" },
+        "totalDena": { "type": "integer", "description": "Sum of active Dena in rupees or paise" },
+        "netBalance": { "type": "integer", "description": "totalLena minus totalDena" },
+        "peopleCount": { "type": "integer", "description": "Number of people in this Khata" },
+        "archived": { "type": "boolean", "description": "Whether the Khata is archived" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp via serverTimestamp" }
+      },
+      "required": ["khataId", "name", "ownerUid", "memberUids", "totalLena", "totalDena", "netBalance", "peopleCount", "archived", "createdAt", "updatedAt"]
+    },
+    "Person": {
+      "title": "Person",
+      "description": "A person / contact associated with a Khata",
+      "type": "object",
+      "properties": {
+        "personId": { "type": "string", "description": "Unique person ID" },
+        "khataId": { "type": "string", "description": "Parent Khata ID" },
+        "name": { "type": "string", "description": "Person name" },
+        "phone": { "type": "string", "description": "Optional contact number" },
+        "note": { "type": "string", "description": "Optional notes or details" },
+        "totalLena": { "type": "integer", "description": "Total amount to receive from this person" },
+        "totalDena": { "type": "integer", "description": "Total amount to pay to this person" },
+        "netBalance": { "type": "integer", "description": "totalLena minus totalDena" },
+        "archived": { "type": "boolean", "description": "Soft delete / archived status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp via serverTimestamp" }
+      },
+      "required": ["personId", "khataId", "name", "totalLena", "totalDena", "netBalance", "archived", "createdAt", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial entry under a Khata and person",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string", "description": "Unique transaction ID" },
+        "khataId": { "type": "string", "description": "Parent Khata ID" },
+        "personId": { "type": "string", "description": "Target person ID" },
+        "amount": { "type": "integer", "description": "Transaction amount in Rupees" },
+        "type": { "type": "string", "enum": ["LENA", "DENA"], "description": "Transaction direction" },
+        "note": { "type": "string", "description": "Description or reason for transaction" },
+        "createdBy": { "type": "string", "description": "UID of the user who recorded this" },
+        "createdByName": { "type": "string", "description": "Display name of the user who recorded this" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Recorded timestamp via serverTimestamp" },
+        "updatedBy": { "type": "string", "description": "UID of user who last modified this" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Modification timestamp via serverTimestamp" },
+        "deletedAt": { "type": "string", "format": "date-time", "description": "Soft deletion timestamp if deleted" }
+      },
+      "required": ["transactionId", "khataId", "personId", "amount", "type", "createdBy", "createdByName", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable append-only audit trail entry for a Khata event",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "description": "Unique log ID" },
+        "khataId": { "type": "string", "description": "Khata ID" },
+        "personId": { "type": "string", "description": "Optional associated person ID" },
+        "transactionId": { "type": "string", "description": "Optional associated transaction ID" },
+        "actorUid": { "type": "string", "description": "UID of actor performing action" },
+        "actorName": { "type": "string", "description": "Display name of actor" },
+        "action": { "type": "string", "description": "Action type code" },
+        "amount": { "type": "integer", "description": "Optional amount involved" },
+        "description": { "type": "string", "description": "Human readable event description" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Event timestamp via serverTimestamp" }
+      },
+      "required": ["logId", "khataId", "actorUid", "actorName", "action", "description", "createdAt"]
+    },
+    "PartnerRequest": {
+      "title": "PartnerRequest",
+      "description": "Invitation request to share a Khata with another user",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "description": "Unique request document ID" },
+        "khataId": { "type": "string", "description": "Khata ID being shared" },
+        "khataName": { "type": "string", "description": "Khata title" },
+        "senderUid": { "type": "string", "description": "UID of sender" },
+        "senderUserId": { "type": "string", "description": "Handle of sender" },
+        "senderName": { "type": "string", "description": "Display name of sender" },
+        "receiverUid": { "type": "string", "description": "UID of recipient" },
+        "receiverUserId": { "type": "string", "description": "Handle of recipient" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "cancelled"], "description": "Request state" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Created timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Updated timestamp via serverTimestamp" }
+      },
+      "required": ["requestId", "khataId", "khataName", "senderUid", "senderUserId", "senderName", "receiverUid", "receiverUserId", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles keyed by Firebase Auth UID"
+    },
+    "/userIds/{normalizedUserId}": {
+      "schema": "UserIdReservation",
+      "description": "Public unique handle registry for uniqueness checking and partner discovery"
+    },
+    "/khatas/{khataId}": {
+      "schema": "Khata",
+      "description": "Stores Khatas with denormalized memberUids for high performance zero-trust isolation"
+    },
+    "/khatas/{khataId}/people/{personId}": {
+      "schema": "Person",
+      "description": "Stores contacts/people associated with a Khata"
+    },
+    "/khatas/{khataId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Stores transactions belonging to a Khata person"
+    },
+    "/khatas/{khataId}/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Append-only immutable audit trail of actions taken in this Khata"
+    },
+    "/partnerRequests/{requestId}": {
+      "schema": "PartnerRequest",
+      "description": "Partner collaboration invitations between users"
+    }
+  }
+}

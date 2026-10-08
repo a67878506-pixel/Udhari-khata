@@ -8,7 +8,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -24,6 +23,27 @@ import kotlinx.coroutines.tasks.await
 object AuthManager {
     private const val TAG = "AuthManager"
 
+    private fun getWebClientId(context: Context): String? {
+        val packageName = context.packageName
+        val resources = context.resources
+
+        // 1. Check generated default_web_client_id from google-services.json
+        val defaultIdRes = resources.getIdentifier("default_web_client_id", "string", packageName)
+        if (defaultIdRes != 0) {
+            val value = runCatching { context.getString(defaultIdRes) }.getOrNull()?.trim()
+            if (!value.isNullOrEmpty()) return value
+        }
+
+        // 2. Check alternative custom resource if provided by developer
+        val customIdRes = resources.getIdentifier("google_web_client_id", "string", packageName)
+        if (customIdRes != 0) {
+            val value = runCatching { context.getString(customIdRes) }.getOrNull()?.trim()
+            if (!value.isNullOrEmpty()) return value
+        }
+
+        return null
+    }
+
     fun attemptAutoSignIn(
         context: Context,
         credentialManager: CredentialManager,
@@ -35,9 +55,9 @@ object AuthManager {
             onAuthSuccess()
             return
         }
-        val clientId = try {
-            context.getString(R.string.default_web_client_id)
-        } catch (_: Exception) {
+        val clientId = getWebClientId(context)
+        if (clientId.isNullOrEmpty()) {
+            Log.w(TAG, "Google Sign-In Web Client ID not found. Auto sign-in skipped.")
             onUnauthenticated()
             return
         }
@@ -76,10 +96,12 @@ object AuthManager {
         scope: CoroutineScope,
         onAuthCancelled: () -> Unit = {}
     ) {
-        val clientId = try {
-            context.getString(R.string.default_web_client_id)
-        } catch (_: Exception) {
-            onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+        val clientId = getWebClientId(context)
+        if (clientId.isNullOrEmpty()) {
+            val msg = "Google Sign-In configuration missing: 'default_web_client_id' not found. " +
+                "Please ensure 'google-services.json' is placed in the 'app/' directory with OAuth Client ID configured."
+            Log.e(TAG, msg)
+            onAuthError(msg)
             return
         }
 

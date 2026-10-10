@@ -77,6 +77,20 @@ jobs:
           fi
           echo "Verified: ./debug.keystore exists and is non-empty."
 
+      - name: Restore Firebase configuration if secret is present
+        env:
+          GOOGLE_SERVICES_JSON_SECRET: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_SECRET" ]; then
+            echo "Restoring google-services.json from repository secret GOOGLE_SERVICES_JSON..."
+            echo "$GOOGLE_SERVICES_JSON_SECRET" | base64 -d > app/google-services.json 2>/dev/null || echo "$GOOGLE_SERVICES_JSON_SECRET" > app/google-services.json
+            echo "Firebase configuration restored successfully."
+          elif [ -f "app/google-services.json" ]; then
+            echo "Using existing app/google-services.json in repository."
+          else
+            echo "Notice: No google-services.json found in repository or secrets."
+          fi
+
       - name: Build debug APK
         run: |
           gradle :app:assembleDebug --stacktrace

@@ -1,6 +1,8 @@
 package com.example
 
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -19,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.example.data.model.Khata
 import com.example.data.model.Person
 import com.example.data.model.User
@@ -28,6 +31,7 @@ import com.example.data.repository.PartnerRepository
 import com.example.data.repository.PersonRepository
 import com.example.data.repository.TransactionRepository
 import com.example.data.repository.UserRepository
+import com.example.ui.auth.FirebaseConfigMissingScreen
 import com.example.ui.auth.OnboardingScreen
 import com.example.ui.auth.SignInScreen
 import com.example.ui.history.AuditHistoryScreen
@@ -39,6 +43,7 @@ import com.example.ui.person.PersonDetailScreen
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
@@ -60,28 +65,78 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val databaseId = getString(R.string.firestore_database_id)
-        val firestore = FirebaseFirestore.getInstance(databaseId)
-
-        val userRepository = UserRepository(firestore)
-        val khataRepository = KhataRepository(firestore)
-        val personRepository = PersonRepository(firestore)
-        val transactionRepository = TransactionRepository(firestore)
-        val partnerRepository = PartnerRepository(firestore)
-        val auditLogRepository = AuditLogRepository(firestore)
-
         setContent {
             MyApplicationTheme {
-                AppRoot(
-                    userRepository = userRepository,
-                    khataRepository = khataRepository,
-                    personRepository = personRepository,
-                    transactionRepository = transactionRepository,
-                    partnerRepository = partnerRepository,
-                    auditLogRepository = auditLogRepository
-                )
+                MainContainer()
             }
         }
+    }
+}
+
+@Composable
+fun MainContainer() {
+    val context = LocalContext.current
+    var isFirebaseReady by remember {
+        mutableStateOf(isFirebaseInitialized(context))
+    }
+
+    if (isFirebaseReady) {
+        val databaseIdRes = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
+        val databaseId = if (databaseIdRes != 0) {
+            runCatching { context.getString(databaseIdRes) }.getOrNull()?.trim().orEmpty()
+        } else ""
+
+        val firestore = remember(databaseId) {
+            try {
+                if (databaseId.isNotBlank() && databaseId != "(default)") {
+                    FirebaseFirestore.getInstance(databaseId)
+                } else {
+                    FirebaseFirestore.getInstance()
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Named Firestore database '$databaseId' failed, falling back to default", e)
+                FirebaseFirestore.getInstance()
+            }
+        }
+
+        val userRepository = remember(firestore) { UserRepository(firestore) }
+        val khataRepository = remember(firestore) { KhataRepository(firestore) }
+        val personRepository = remember(firestore) { PersonRepository(firestore) }
+        val transactionRepository = remember(firestore) { TransactionRepository(firestore) }
+        val partnerRepository = remember(firestore) { PartnerRepository(firestore) }
+        val auditLogRepository = remember(firestore) { AuditLogRepository(firestore) }
+
+        AppRoot(
+            userRepository = userRepository,
+            khataRepository = khataRepository,
+            personRepository = personRepository,
+            transactionRepository = transactionRepository,
+            partnerRepository = partnerRepository,
+            auditLogRepository = auditLogRepository
+        )
+    } else {
+        FirebaseConfigMissingScreen(
+            onRetry = {
+                if (tryInitializeFirebase(context)) {
+                    isFirebaseReady = true
+                }
+            }
+        )
+    }
+}
+
+private fun isFirebaseInitialized(context: Context): Boolean {
+    return FirebaseApp.getApps(context).isNotEmpty() || tryInitializeFirebase(context)
+}
+
+private fun tryInitializeFirebase(context: Context): Boolean {
+    if (FirebaseApp.getApps(context).isNotEmpty()) return true
+    return try {
+        val app = FirebaseApp.initializeApp(context)
+        app != null || FirebaseApp.getApps(context).isNotEmpty()
+    } catch (e: Exception) {
+        Log.w("MainActivity", "Firebase initialization check: ${e.message}")
+        false
     }
 }
 
@@ -94,15 +149,22 @@ fun AppRoot(
     partnerRepository: PartnerRepository,
     auditLogRepository: AuditLogRepository
 ) {
-    var firebaseUser by remember { mutableStateOf(Firebase.auth.currentUser) }
+    var firebaseUser by remember {
+        mutableStateOf(runCatching { Firebase.auth.currentUser }.getOrNull())
+    }
 
     DisposableEffect(Unit) {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            firebaseUser = auth.currentUser
-        }
-        Firebase.auth.addAuthStateListener(listener)
-        onDispose {
-            Firebase.auth.removeAuthStateListener(listener)
+        val auth = runCatching { Firebase.auth }.getOrNull()
+        if (auth != null) {
+            val listener = FirebaseAuth.AuthStateListener { a ->
+                firebaseUser = a.currentUser
+            }
+            auth.addAuthStateListener(listener)
+            onDispose {
+                auth.removeAuthStateListener(listener)
+            }
+        } else {
+            onDispose {}
         }
     }
 
@@ -110,7 +172,7 @@ fun AppRoot(
     if (user == null) {
         SignInScreen(
             onAuthSuccess = {
-                firebaseUser = Firebase.auth.currentUser
+                firebaseUser = runCatching { Firebase.auth.currentUser }.getOrNull()
             }
         )
     } else {
